@@ -1,0 +1,14 @@
+[package]
+name = "zylith_core"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.14.0"
+assert_macros = "2.14.0"
+zylith_privacy = { path = "../privacy" }
+swap_verifier = { path = "../swap_verifier" }
+lp_verifier = { path = "../lp_verifier" }
+
+[[target.starknet-contract]]
+casm = true

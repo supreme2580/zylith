@@ -1,0 +1,37 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@starknet-react/chains": "^5.0.3",
+    "@starknet-react/core": "^5.0.3",
+    "clsx": "^2.1.1",
+    "garaga": "^1.0.1",
+    "get-starknet-core": "^4.0.0",
+    "lucide-react": "^0.562.0",
+    "next": "16.1.1",
+    "poseidon-lite": "^0.3.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "snarkjs": "^0.7.6",
+    "starknet": "^9.2.1",
+    "starknetkit": "^3.4.3",
+    "tailwind-merge": "^3.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+target/
+.scarb/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-journal
+
+# OS files
+.DS_Store
+
+# Large binaries from circuits
+*.ptau
+*.zkey
+*.wasm
+
+*.r1cs
