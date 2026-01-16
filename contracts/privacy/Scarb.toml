@@ -1,0 +1,15 @@
+[package]
+name = "zylith_privacy"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.14.0"
+assert_macros = "2.14.0"
+
+[[target.starknet-contract]]
+casm = true
+
+[lib]
+name = "zylith_privacy"
+path = "src/lib.cairo"

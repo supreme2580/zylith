@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "core",
+    "privacy",
+    "swap_verifier",
+    "lp_verifier"
+]
+
+[cairo]
+sierra-replace-ids = true

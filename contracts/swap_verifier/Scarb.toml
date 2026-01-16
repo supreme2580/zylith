@@ -1,0 +1,15 @@
+[package]
+name = "swap_verifier"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.14.0"
+garaga = { git = "https://github.com/keep-starknet-strange/garaga.git", tag = "v1.0.1" }
+
+[[target.starknet-contract]]
+casm = true
+
+[lib]
+name = "swap_verifier"
+path = "src/lib.cairo"
