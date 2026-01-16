@@ -45,6 +45,17 @@ This README documents what we implemented for the bounty, the architecture choic
 - **Output commitments**: the circuits bind `change_commitment` to the output note commitment.
 - **Reserve safety**: withdrawals/fee collection use safe subtraction to avoid underflow.
 - **Tokens set at constructor**: pool is deployed with token0/token1 set (no post‑init step).
+- **CLMM position composition**: LP positions **shift between token0/token1 as price moves** within the tick range. The UI shows the **current expected withdrawal amounts** based on live pool price, not the initial deposit ratio.
+
+## Gas Costs (MVP Reality)
+
+Shielded actions are more expensive than public swaps/LP because each transaction does **more work**:
+- proof verification (Groth16 via Garaga),
+- merkle root/path checks,
+- nullifier tracking,
+- and extra calldata for proof inputs.
+
+This is expected for privacy‑preserving flows and will be optimized in later versions.
 
 ## Build & Deploy (Exact Flow)
 
