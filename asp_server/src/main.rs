@@ -38,6 +38,20 @@ struct MerklePathResponse {
     commitment: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TokenInfo {
+    address: String,
+    name: String,
+    symbol: String,
+    decimals: u8,
+    logo: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct TokensResponse {
+    tokens: Vec<TokenInfo>,
+}
+
 const TREE_HEIGHT: usize = 25;
 
 struct AppState {
@@ -263,6 +277,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/get_path", post(get_merkle_path))
+        .route("/tokens", get(get_tokens))
         .route("/health", get(health_check))
         .layer(cors)
         .with_state(state);
@@ -346,6 +361,41 @@ async fn sync_events(
 
 async fn health_check() -> &'static str {
     "Zylith ASP Server is healthy"
+}
+
+async fn get_tokens() -> Json<TokensResponse> {
+    let tokens = vec![
+        TokenInfo {
+            address: std::env::var("TOKEN0_ADDRESS")
+                .unwrap_or_else(|_| "0x0".to_string()),
+            name: std::env::var("TOKEN0_NAME")
+                .unwrap_or_else(|_| "TOKEN0".to_string()),
+            symbol: std::env::var("TOKEN0_SYMBOL")
+                .unwrap_or_else(|_| "TOKEN0".to_string()),
+            decimals: std::env::var("TOKEN0_DECIMALS")
+                .ok()
+                .and_then(|v| v.parse::<u8>().ok())
+                .unwrap_or(18),
+            logo: std::env::var("TOKEN0_LOGO")
+                .unwrap_or_else(|_| "".to_string()),
+        },
+        TokenInfo {
+            address: std::env::var("TOKEN1_ADDRESS")
+                .unwrap_or_else(|_| "0x0".to_string()),
+            name: std::env::var("TOKEN1_NAME")
+                .unwrap_or_else(|_| "TOKEN1".to_string()),
+            symbol: std::env::var("TOKEN1_SYMBOL")
+                .unwrap_or_else(|_| "TOKEN1".to_string()),
+            decimals: std::env::var("TOKEN1_DECIMALS")
+                .ok()
+                .and_then(|v| v.parse::<u8>().ok())
+                .unwrap_or(18),
+            logo: std::env::var("TOKEN1_LOGO")
+                .unwrap_or_else(|_| "".to_string()),
+        },
+    ];
+
+    Json(TokensResponse { tokens })
 }
 
 async fn get_merkle_path(

@@ -249,9 +249,9 @@ mod ZylithPool {
             // 3. Update reserves
             if zero_for_one {
                 self.reserve0.write(self.reserve0.read() + amount_in.into());
-                self.reserve1.write(self.reserve1.read() - amount_out.into());
+                self.reserve1.write(sub_or_zero(self.reserve1.read(), amount_out));
             } else {
-                self.reserve0.write(self.reserve0.read() - amount_out.into());
+                self.reserve0.write(sub_or_zero(self.reserve0.read(), amount_out));
                 self.reserve1.write(self.reserve1.read() + amount_in.into());
             }
 
@@ -431,9 +431,9 @@ mod ZylithPool {
             // Update reserves
             if zero_for_one {
                 self.reserve0.write(self.reserve0.read() + amount_in.into());
-                self.reserve1.write(self.reserve1.read() - amount_out.into());
+                self.reserve1.write(sub_or_zero(self.reserve1.read(), amount_out));
             } else {
-                self.reserve0.write(self.reserve0.read() - amount_out.into());
+                self.reserve0.write(sub_or_zero(self.reserve0.read(), amount_out));
                 self.reserve1.write(self.reserve1.read() + amount_in.into());
             }
 
