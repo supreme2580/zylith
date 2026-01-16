@@ -1332,9 +1332,19 @@ export default function Home() {
                 {userNotes.filter(n => (n.type === 'swap' || !n.type) && !isSpent(computeNullifierHash(n))).map((note, i) => (
                   <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-white/[0.03] border border-white/5">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black ${note.token === token0Meta?.address ? 'bg-[#F7931A]/10 text-[#F7931A]' : 'bg-[#627EEA]/10 text-[#627EEA]'}`}>
-                        {note.token === token0Meta?.address ? 'B' : 'E'}
-                      </div>
+                      {note.token === token0Meta?.address ? (
+                        token0Meta?.logo ? (
+                          <img src={token0Meta.logo} alt={token0Meta.symbol} className="w-8 h-8 rounded-lg shadow-lg" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg shadow-lg bg-[#F7931A]" />
+                        )
+                      ) : (
+                        token1Meta?.logo ? (
+                          <img src={token1Meta.logo} alt={token1Meta.symbol} className="w-8 h-8 rounded-lg shadow-lg" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg shadow-lg bg-[#627EEA]" />
+                        )
+                      )}
                       <div className="text-[10px] font-black uppercase tracking-wider">{formatAmount(note.amount, note.token === token0Meta?.address ? (token0Meta?.decimals ?? 18) : (token1Meta?.decimals ?? 6), 4)} {note.token === token0Meta?.address ? token0Label : token1Label}</div>
                     </div>
                     <button 
