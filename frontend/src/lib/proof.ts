@@ -201,6 +201,133 @@ export async function generateZylithLPProof(
 }
 
 /**
+ * Generates ZK proof for withdrawal (public withdraw)
+ */
+export async function generateZylithWithdrawProof(
+  secret: string,
+  nullifier: string,
+  balance: bigint,
+  amount: bigint,
+  merklePath: { path: string[], indices: number[] },
+  root: string,
+  changeCommitment: bigint = 0n
+): Promise<ZKProofResult> {
+  if (typeof window === 'undefined') throw new Error("Browser only");
+  const snarkjs = (await import('snarkjs')) as any;
+
+  const secretBI = BigInt(safeHex(secret));
+  const nullifierBI = BigInt(safeHex(nullifier));
+  const balanceBI = BigInt(balance);
+
+  // Note Hasher (Poseidon(secret, nullifier))
+  const noteHash = poseidon2([secretBI, nullifierBI]);
+  
+  // Commitment (Poseidon(noteHash, balance))
+  const commitment = poseidon2([BigInt(noteHash), balanceBI]);
+
+  // Nullifier Hash (Poseidon(secret, commitment))
+  const nullifierHash = poseidon2([secretBI, BigInt(commitment)]);
+
+  const padPath = (path: string[], targetLen: number) => {
+    const padded = [...path];
+    while (padded.length < targetLen) padded.push("0x0");
+    return padded;
+  };
+
+  const padIndices = (indices: number[], targetLen: number) => {
+    const padded = [...indices];
+    while (padded.length < targetLen) padded.push(0);
+    return padded;
+  };
+
+  const inputs = {
+    secret: secretBI.toString(),
+    nullifier: nullifierBI.toString(),
+    balance: balanceBI.toString(),
+    amount: amount.toString(),
+    path_elements: padPath(merklePath.path, 25).map(p => BigInt(safeHex(p)).toString()),
+    path_indices: padIndices(merklePath.indices, 25).map(i => i.toString()),
+    root: BigInt(safeHex(root || "0x0")).toString(),
+    nullifier_hash: nullifierHash.toString(),
+    change_commitment: changeCommitment.toString()
+  };
+
+  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+    inputs,
+    "/circuits/withdraw.wasm",
+    "/circuits/withdraw.zkey"
+  );
+
+  return { proof, publicInputs: publicSignals };
+}
+
+/**
+ * Generates ZK proof for LP position ownership (for fee collection and removal)
+ * Uses LP circuit structure but for ownership verification
+ */
+export async function generateZylithLPOwnershipProof(
+  secret: string,
+  nullifier: string,
+  balance: bigint,
+  tickLower: number,
+  tickUpper: number,
+  merklePath: { path: string[], indices: number[] },
+  root: string,
+  poolState: { sqrtPrice: bigint, sqrtLower: bigint, sqrtUpper: bigint }
+): Promise<ZKProofResult> {
+  if (typeof window === 'undefined') throw new Error("Browser only");
+  const snarkjs = (await import('snarkjs')) as any;
+
+  const secretBI = BigInt(safeHex(secret));
+  const nullifierBI = BigInt(safeHex(nullifier));
+  const balanceBI = BigInt(balance);
+
+  const noteHash = poseidon2([secretBI, nullifierBI]);
+  const commitment = poseidon2([BigInt(noteHash), balanceBI]);
+  const nullifierHash = poseidon2([secretBI, BigInt(commitment)]);
+
+  const padPath = (path: string[], targetLen: number) => {
+    const padded = [...path];
+    while (padded.length < targetLen) padded.push("0x0");
+    return padded;
+  };
+
+  const padIndices = (indices: number[], targetLen: number) => {
+    const padded = [...indices];
+    while (padded.length < targetLen) padded.push(0);
+    return padded;
+  };
+
+  // For ownership proof, we use balance as amount_in (full ownership)
+  const inputs = {
+    secret: secretBI.toString(),
+    nullifier: nullifierBI.toString(),
+    balance: balanceBI.toString(),
+    amount_in: balanceBI.toString(),
+    out_secret: secretBI.toString(), // Reuse for ownership
+    out_nullifier: nullifierBI.toString(),
+    tick_lower: toFelt(tickLower),
+    tick_upper: toFelt(tickUpper),
+    path_elements: padPath(merklePath.path, 25).map(p => BigInt(safeHex(p)).toString()),
+    path_indices: padIndices(merklePath.indices, 25).map(i => i.toString()),
+    root: BigInt(safeHex(root || "0x0")).toString(),
+    nullifier_hash: nullifierHash.toString(),
+    change_commitment: commitment.toString(), // Keep same commitment for ownership
+    sqrt_price: poolState.sqrtPrice.toString(),
+    sqrt_lower: poolState.sqrtLower.toString(),
+    sqrt_upper: poolState.sqrtUpper.toString()
+  };
+
+  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+    inputs,
+    "/circuits/lp.wasm",
+    "/circuits/lp.zkey"
+  );
+
+  return { proof, publicInputs: publicSignals };
+}
+
+/**
  * Formats Groth16 proof for Starknet using Garaga
  */
 export async function formatGroth16ProofForStarknet(
