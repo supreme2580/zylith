@@ -1,122 +1,123 @@
 # Zylith Protocol
 
-Zylith is a shielded Concentrated Liquidity Market Maker (CLMM) on Starknet/Ztarknet. It enables private trading and liquidity provision using Zero-Knowledge Proofs.
+Zylith is a shielded Concentrated Liquidity Market Maker (CLMM) on Starknet/Ztarknet. The MVP demonstrates a privacy-preserving AMM where swap/LP operations are proved in zero knowledge while matching Ekubo‑style CLMM math and tick behavior.
+
+This README documents what we implemented for the bounty, the architecture choices, and the exact build/deploy flow used.
+
+## Bounty Summary (What We Built)
+
+### CLMM Core (Cairo)
+
+- Ekubo‑like swap loop and `swap_step` math in 128.128 fixed‑point.
+- Tick management, initialized tick bitmap, fee growth, and protocol fees.
+- Liquidity positions keyed by **commitments** rather than addresses.
+- Precision‑safe math for price transitions and liquidity deltas.
+
+### Shielded Layer (Privacy MVP)
+
+- Notes follow Privacy Pools: `commitment = Poseidon(Poseidon(secret, nullifier), amount)`.
+- Merkle tree root tracking + nullifiers for double‑spend protection.
+- **Private swaps**: proof asserts ownership + correct price transition + output commitment.
+- **Private LP**: proof asserts ownership + liquidity delta + output commitment.
+- Bounds/tick ranges are public in the MVP (range privacy deferred).
+
+### ASP Server
+
+- Rust (Axum) Association Set Provider recreates Merkle paths from on‑chain `Deposit` events.
+- Tree height 25, 2^24 leaves, 24 path elements.
+- Handles private operations that emit `amount = 0` by treating `note_hash` as a commitment.
+
+### Verifier
+
+- Groth16 via **Garaga** for swap + LP membership and math constraints.
+- Verifier contracts embedded in `contracts/swap_verifier` and `contracts/lp_verifier`.
 
 ## Project Structure
-- `zylith/contracts`: Cairo v2.14.0 smart contracts (Workspace: core, privacy, swap_verifier, lp_verifier).
-- `zylith/circom_circuits`: Circom v2.1.6 circuits for Swap and LP verification.
-- `zylith/asp_server`: Rust (Axum) Association Set Provider server for Merkle path reconstruction.
-- `zylith/frontend`: Next.js 16 frontend with Starknet-React and Garaga proof formatting.
 
-## Full Deployment Guide
+- `contracts/`: Cairo contracts (core CLMM + privacy + verifiers).
+- `circom_circuits/`: Circom swap/LP circuits and VKs.
+- `asp_server/`: Rust ASP for Merkle paths.
+- `frontend/`: Next.js app (wallet, proofs, swaps, LP, withdrawals).
 
-### 1. Build ZK Circuits
-Navigate to `zylith/circom_circuits`:
+## MVP Notes (Important Design Choices)
+
+- **Full‑spend notes**: private swap/LP proofs consume a full note and produce a fresh output note.
+- **Output commitments**: the circuits bind `change_commitment` to the output note commitment.
+- **Reserve safety**: withdrawals/fee collection use safe subtraction to avoid underflow.
+- **Tokens set at constructor**: pool is deployed with token0/token1 set (no post‑init step).
+
+## Build & Deploy (Exact Flow)
+
+### 1) Circuits (Groth16)
+
+From `circom_circuits`:
 
 ```bash
-# A. Generate Powers of Tau (Required for Groth16)
-snarkjs powersoftau new bn128 14 pot14_0000.ptau -v
-snarkjs powersoftau contribute pot14_0000.ptau pot14_0001.ptau --name="Zylith Contribution" -v
-snarkjs powersoftau prepare phase2 pot14_0001.ptau pot14_final.ptau -v
+npm install
 
-# B. Compile Circuits to R1CS and WASM
+# Create PoT for 2^16 (swap/lp circuits require this size)
+npx snarkjs powersoftau new bn128 16 pot16_0000.ptau -v
+npx snarkjs powersoftau contribute pot16_0000.ptau pot16_0001.ptau --name="zylith" -v -e="zylith"
+npx snarkjs powersoftau prepare phase2 pot16_0001.ptau pot16_final.ptau -v
+
 mkdir -p build
 circom swap.circom --wasm --r1cs -o ./build -l node_modules
 circom lp.circom --wasm --r1cs -o ./build -l node_modules
 
-# C. Setup ZKeys & Verification Keys (VKs)
-snarkjs groth16 setup build/swap.r1cs pot14_final.ptau swap_final.zkey
-snarkjs zkey export verificationkey swap_final.zkey swap_vk.json
+npx snarkjs groth16 setup build/swap.r1cs pot16_final.ptau swap_0000.zkey
+npx snarkjs zkey contribute swap_0000.zkey swap_final.zkey --name="zylith" -v -e="zylith"
+npx snarkjs zkey export verificationkey swap_final.zkey swap_vk.json
 
-snarkjs groth16 setup build/lp.r1cs pot14_final.ptau lp_final.zkey
-snarkjs zkey export verificationkey lp_final.zkey lp_vk.json
+npx snarkjs groth16 setup build/lp.r1cs pot16_final.ptau lp_0000.zkey
+npx snarkjs zkey contribute lp_0000.zkey lp_final.zkey --name="zylith" -v -e="zylith"
+npx snarkjs zkey export verificationkey lp_final.zkey lp_vk.json
 ```
 
-### 2. Generate Garaga Verifiers (Cairo)
+### 2) Generate Garaga Verifiers
+
 ```bash
 garaga gen --system groth16 --vk swap_vk.json --project-name swap_verifier
 garaga gen --system groth16 --vk lp_vk.json --project-name lp_verifier
 ```
 
-### 3. Move & Tweak Verifiers
-After generating the verifiers, move them to the contract directories and perform these **mandatory renames** to avoid naming collisions:
+### 3) Copy Verifiers into Contracts
 
 ```bash
-# Move Swap Verifier
-mv swap_verifier/src/groth16_verifier.cairo ../contracts/swap_verifier/src/swap_verifier.cairo
-mv swap_verifier/src/groth16_verifier_constants.cairo ../contracts/swap_verifier/src/swap_verifier_constants.cairo
+cp swap_verifier/src/groth16_verifier.cairo ../contracts/swap_verifier/src/swap_verifier.cairo
+cp swap_verifier/src/groth16_verifier_constants.cairo ../contracts/swap_verifier/src/swap_verifier_constants.cairo
+cp lp_verifier/src/groth16_verifier.cairo ../contracts/lp_verifier/src/lp_verifier.cairo
+cp lp_verifier/src/groth16_verifier_constants.cairo ../contracts/lp_verifier/src/lp_verifier_constants.cairo
+```
 
-# Move LP Verifier
-mv lp_verifier/src/groth16_verifier.cairo ../contracts/lp_verifier/src/lp_verifier.cairo
-mv lp_verifier/src/groth16_verifier_constants.cairo ../contracts/lp_verifier/src/lp_verifier_constants.cairo
+**Rename modules/traits to match pool imports**:
 
-# Copy circuit artifacts to frontend
+- `swap_verifier.cairo`: `ISwapVerifier` + `SwapVerifier`
+- `lp_verifier.cairo`: `ILPVerifier` + `LPVerifier`
+
+### 4) Copy Circuit Artifacts to Frontend
+
+```bash
+mkdir -p ../frontend/public/circuits
 cp build/swap_js/swap.wasm ../frontend/public/circuits/swap.wasm
 cp swap_final.zkey ../frontend/public/circuits/swap.zkey
 cp swap_vk.json ../frontend/public/circuits/swap_vk.json
-
 cp build/lp_js/lp.wasm ../frontend/public/circuits/lp.wasm
 cp lp_final.zkey ../frontend/public/circuits/lp.zkey
 cp lp_vk.json ../frontend/public/circuits/lp_vk.json
 ```
 
-**⚠️ Important Manual Tweaks:**
+### 5) Deploy (Sepolia)
 
-To avoid naming collisions and match the `ZylithPool` expectations, you must rename the traits and modules. Here is exactly what to change in `swap_verifier.cairo`:
-
-**Before:**
-```cairo
-use super::groth16_verifier_constants::{...};
-
-#[starknet::interface]
-pub trait IGroth16VerifierBN254<TContractState> { ... }
-
-#[starknet::contract]
-mod Groth16VerifierBN254 {
-    impl IGroth16VerifierBN254 of super::IGroth16VerifierBN254<ContractState> { ... }
-}
-```
-
-**After (Correct):**
-```cairo
-// 1. Change import to match the local constants file
-use super::swap_verifier_constants::{N_PUBLIC_INPUTS, ic, precomputed_lines, vk};
-
-#[starknet::interface]
-pub trait ISwapVerifier<TContractState> { ... } // 2. Rename Trait
-
-#[starknet::contract]
-mod SwapVerifier { // 3. Rename Module
-    // 4. Update the implementation line to match the new names
-    impl ISwapVerifier of super::ISwapVerifier<ContractState> { ... }
-}
-```
-
-*(Perform the same steps for `lp_verifier.cairo`, using `lp_verifier_constants`, `ILPVerifier`, and `LPVerifier` names instead.)*
-
-3.  **Imports**: Ensure `contracts/core/src/pool.cairo` correctly imports `ISwapVerifierDispatcher` and `ILPVerifierDispatcher`.
-
-### 4. Deploy to Starknet (Sepolia)
-
-#### A. Deploy Swap Verifier
 ```bash
-cd contracts
-sncast declare --package swap_verifier --contract-name SwapVerifier --network sepolia
-sncast deploy --class-hash <SWAP_CLASS_HASH> --network sepolia
-# SAVE: SWAP_VERIFIER_ADDRESS
-```
+cd ../contracts
+sncast --account <ACCOUNT> declare --package swap_verifier --contract-name SwapVerifier --network sepolia
+sncast --account <ACCOUNT> deploy --class-hash <SWAP_CLASS_HASH> --network sepolia
 
-#### B. Deploy LP Verifier
-```bash
-sncast declare --package lp_verifier --contract-name LPVerifier --network sepolia
-sncast deploy --class-hash <LP_CLASS_HASH> --network sepolia
-# SAVE: LP_VERIFIER_ADDRESS
-```
+sncast --account <ACCOUNT> declare --package lp_verifier --contract-name LPVerifier --network sepolia
+sncast --account <ACCOUNT> deploy --class-hash <LP_CLASS_HASH> --network sepolia
 
-#### C. Deploy ZylithPool
-```bash
-sncast declare --package zylith_core --contract-name ZylithPool --network sepolia
-sncast deploy --package zylith_core --contract-name ZylithPool --network sepolia --constructor-calldata \
+sncast --account <ACCOUNT> declare --package zylith_core --contract-name ZylithPool --network sepolia
+sncast --account <ACCOUNT> deploy --class-hash <POOL_CLASS_HASH> --network sepolia --constructor-calldata \
   <SWAP_VERIFIER_ADDR> \
   <LP_VERIFIER_ADDR> \
   <TOKEN0_ADDR> \
@@ -124,58 +125,44 @@ sncast deploy --package zylith_core --contract-name ZylithPool --network sepolia
   79228162514264337593543950336 0 100 10
 ```
 
-**Constructor Parameters Explained:**
-1. `swap_verifier`: Address of the SwapVerifier contract.
-2. `lp_verifier`: Address of the LPVerifier contract.
-3. `token0`: Address of the first ERC20 token.
-4. `token1`: Address of the second ERC20 token.
-5. `initial_sqrt_price`: Two felts (`79228162514264337593543950336 0`) representing $2^{96}$ (Price of 1.0 in Q96 fixed-point).
-6. `protocol_fee_rate`: `100` (1.00%).
-7. `withdrawal_fee_rate`: `10` (0.10%).
+## Public Inputs (MVP Circuits)
 
-### Updated ZK Public Inputs
-After the latest MVP updates, the circuits include additional public inputs:
-
-- **swap.circom** public inputs:
+- **swap.circom**:  
   `root, nullifier_hash, amount_in, amount_out, min_amount_out, change_commitment, sqrt_price, liquidity, zero_for_one`
-
-- **lp.circom** public inputs:
+- **lp.circom**:  
   `root, nullifier_hash, liquidity_delta, tick_lower, tick_upper, change_commitment, sqrt_price, sqrt_lower, sqrt_upper`
 
 ## ASP Server Setup
-1. Update `zylith/asp_server/env.example` $\rightarrow$ `.env` with your `ZYLITH_POOL_ADDRESS`.
-2. Run with `cargo run`.
 
-## Frontend Setup
-1. Copy circuit artifacts from `zylith/circom_circuits/build/*_js/*.wasm` and the generated `.zkey`/`.json` files to `zylith/frontend/public/circuits/`.
-2. Update `zylith/frontend/env.example` $\rightarrow$ `.env.local` with all contract addresses.
-3. Install dependencies and run:
-   ```bash
-   npm install
-   npm run dev
-   ```
-
-## Deployment (Jan 12, 2026)
-- **ZylithPool**: `0x037fc465a0b97ef7286f33847dbba763d9dbc2b7fe5830453399d0744c3051c3`
-- **SwapVerifier**: `0x03f07de4c998c91097820e20c6250f3c46d63af55dba32a75f6c95b983727406`
-- **LPVerifier**: `0x0063fc1bad88254572d7acdc19bd14f80206cb37122443d6203956cde0e8dd7d`
-
-## How to Rebuild
 ```bash
-# 1. Compile circuits
-cd circom_circuits
-circom swap.circom --wasm --r1cs --output . -l node_modules
-snarkjs groth16 setup swap.r1cs powersOfTau28_hez_final_14.ptau swap_0000.zkey
-snarkjs zkey contribute swap_0000.zkey swap_final.zkey --name="1st" -v -e="some text"
-snarkjs zkey export verificationkey swap_final.zkey swap_vk.json
-
-# 2. Generate Cairo verifiers
-garaga gen --system groth16 --vk swap_vk.json --project-name swap_verifier
-cp swap_verifier/src/groth16_verifier_constants.cairo ../contracts/swap_verifier/src/swap_verifier_constants.cairo
-
-# 3. Redeploy
-cd ../contracts
-sncast declare --network sepolia --contract-name SwapVerifier --package swap_verifier
-sncast deploy --network sepolia --class-hash <NEW_HASH>
-# ... update pool ...
+cd asp_server
+cp env.example .env
+# set ZYLITH_POOL_ADDRESS
+cargo run
 ```
+
+## Frontend App
+
+```bash
+cd frontend
+cp env.example .env.local
+# set all contract addresses
+npm install
+npm run dev
+```
+
+## Latest Sepolia Deployment
+
+- **ZylithPool**: `0x0256b4b7fb5f536934df8f6734b6a2eb475f0fa5343a18c610dcd5a44c1eda67`
+- **SwapVerifier**: `0x0667c9d49abe50706f10dfdc4106b350996cc19de65cfa0cbb93c422caa835bc`
+- **LPVerifier**: `0x07691f9e332381715ca5c98b6a1c9b5092d3f5b7a1e4c9e2729c5e675baf3470`
+
+## What’s Not in MVP (Intentional)
+
+- TWAMM
+- Limit orders
+- Oracle extension
+- Private routing and multi‑hop swaps
+- Private range selection and private fee collection
+
+These are deferred to the full protocol, while the MVP focuses on proof‑backed private swaps and LP on a working CLMM core.
