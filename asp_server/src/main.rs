@@ -262,11 +262,10 @@ async fn main() {
         ).unwrap();
 
         loop {
-            println!("Indexer: Checking for new Zylith events...");
             if let Err(e) = sync_events(&provider, &indexer_state, contract_address).await {
-                eprintln!("Indexing error: {:?}", e);
+                eprintln!("Error syncing events: {:?}", e);
             }
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
 

@@ -557,46 +557,15 @@ export default function Home() {
           const sqrtPUpper = getSqrtPriceAtTick(parseInt(tickUpper));
           
           let otherAmountBI = 0n;
-          const dec0 = token0Meta?.decimals ?? 18;
-          const dec1 = token1Meta?.decimals ?? 6;
-          const tickLowerNum = parseInt(tickLower);
-          const tickUpperNum = parseInt(tickUpper);
-          const isWideRange = Math.abs(tickLowerNum) > 500000 && Math.abs(tickUpperNum) > 500000;
-          const priceRatio = (sqrtPCurrent * sqrtPCurrent) / (Q96 * Q96);
-          const scaleAmount = (value: bigint, fromDec: number, toDec: number) => {
-            if (fromDec === toDec) return value;
-            const factor = 10n ** BigInt(Math.abs(fromDec - toDec));
-            return fromDec > toDec ? value / factor : value * factor;
-          };
-          const amount1FromPrice = scaleAmount(amountBI * priceRatio, dec0, dec1);
-          const amount0FromPrice = priceRatio > 0n
-            ? scaleAmount(amountBI / priceRatio, dec1, dec0)
-            : 0n;
 
           if (swapDirection === '0to1') {
             const liq = getLiquidityFromAmount0(sqrtPCurrent, sqrtPUpper, amountBI);
             const computed = getAmount1Delta(sqrtPLower, sqrtPCurrent, liq);
-            if (isWideRange && amount1FromPrice > 0n) {
-              if (computed === 0n || computed > amount1FromPrice * 1000n) {
-                otherAmountBI = amount1FromPrice;
-              } else {
-                otherAmountBI = computed;
-              }
-            } else {
-              otherAmountBI = computed;
-            }
+            otherAmountBI = computed;
           } else {
             const liq = getLiquidityFromAmount1(sqrtPLower, sqrtPCurrent, amountBI);
             const computed = getAmount0Delta(sqrtPCurrent, sqrtPUpper, liq);
-            if (isWideRange && amount0FromPrice > 0n) {
-              if (computed === 0n || computed > amount0FromPrice * 1000n) {
-                otherAmountBI = amount0FromPrice;
-              } else {
-                otherAmountBI = computed;
-              }
-            } else {
-              otherAmountBI = computed;
-            }
+            otherAmountBI = computed;
           }
           
           // Add 0.5% buffer to approval to prevent "insufficient allowance" due to contract-side rounding up
@@ -1040,22 +1009,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* In-card Stats */}
-              <div className="grid grid-cols-3 gap-2 mb-6">
-                <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5">
-                  <div className="text-[8px] font-black text-white/20 uppercase tracking-widest mb-1">{token0Label} Reserve</div>
-                  <div className="text-xs font-black">{formatAmount(reserves.res0, token0Meta?.decimals ?? 18, 4)}</div>
-                </div>
-                <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5">
-                  <div className="text-[8px] font-black text-white/20 uppercase tracking-widest mb-1">{token1Label} Reserve</div>
-                  <div className="text-xs font-black">{formatAmount(reserves.res1, token1Meta?.decimals ?? 6, 4)}</div>
-                </div>
-                <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5">
-                  <div className="text-[8px] font-black text-white/20 uppercase tracking-widest mb-1">Ratio</div>
-                  <div className="text-xs font-black">{`1:${priceRatio}`}</div>
-                </div>
-              </div>
-
               {error && (
                 <div className="mb-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-3 text-red-400">
                   <EyeOff className="w-4 h-4 shrink-0" />
@@ -1176,6 +1129,16 @@ export default function Home() {
                     )}
                   </div>
                 </button>
+              </div>
+
+              {/* In-card Stats */}
+              <div className="flex flex-row space-x-2 mb-6">
+                <div className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex-1">
+                  <div className="text-[8px] font-black text-white/20 uppercase tracking-widest mb-1">Fees</div>
+                  <div className="text-[9px] font-black leading-tight">
+                    There is a 0.3% swap fee and 0.3% LP fee
+                  </div>
+                </div>
               </div>
               </div>
             </div>

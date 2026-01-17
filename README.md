@@ -1,36 +1,37 @@
 # Zylith Protocol
 
-Zylith is a shielded Concentrated Liquidity Market Maker (CLMM) on Starknet/Ztarknet. The MVP demonstrates a privacy-preserving AMM where swap/LP operations are proved in zero knowledge while matching Ekubo‑style CLMM math and tick behavior.
+Zylith is a shielded Concentrated Liquidity Market Maker (CLMM) on Starknet/Ztarknet. The MVP is a fully functional but minimal private AMM where all core swap and LP actions are proved in zero knowledge while the CLMM math and tick behavior closely follow Ekubo.
 
-This README documents what we implemented for the bounty, the architecture choices, and the exact build/deploy flow used.
+This README documents the system architecture, what is in scope for the MVP, and the exact build/deploy flow.
 
-## Bounty Summary (What We Built)
+## System Architecture Summary
 
 ### CLMM Core (Cairo)
 
-- Ekubo‑like swap loop and `swap_step` math in 128.128 fixed‑point.
-- Tick management, initialized tick bitmap, fee growth, and protocol fees.
-- Liquidity positions keyed by **commitments** rather than addresses.
-- Precision‑safe math for price transitions and liquidity deltas.
+- Core pool mechanics: sqrt price, active tick, liquidity, fee growth, protocol fees.
+- Tick structures: liquidity net/delta, fee growth outside, initialized tick bitmap, Ekubo‑style tick navigation.
+- Swap engine: `swap_step` loop, tick crossing, protocol fee accounting, 128.128 sqrt‑price math and u128 liquidity/fee arithmetic.
+- Liquidity management: add/remove liquidity across tick ranges with positions keyed by cryptographic commitments instead of addresses.
 
-### Shielded Layer (Privacy MVP)
+### Shielded Pool
 
-- Notes follow Privacy Pools: `commitment = Poseidon(Poseidon(secret, nullifier), amount)`.
-- Merkle tree root tracking + nullifiers for double‑spend protection.
-- **Private swaps**: proof asserts ownership + correct price transition + output commitment.
-- **Private LP**: proof asserts ownership + liquidity delta + output commitment.
-- Bounds/tick ranges are public in the MVP (range privacy deferred).
+- Commitments represent private balances with Privacy Pools–style structure: `Poseidon(Poseidon(secret, nullifier), amount)`.
+- Merkle tree roots are tracked on‑chain; nullifiers prevent double spends; historical roots are accepted via the Merkle component.
 
-### ASP Server
+### Private Swap & LP Layer
 
-- Rust (Axum) Association Set Provider recreates Merkle paths from on‑chain `Deposit` events.
-- Tree height 25, 2^24 leaves, 24 path elements.
-- Handles private operations that emit `amount = 0` by treating `note_hash` as a commitment.
+- Private swaps: user proves note ownership, sufficient balance, and correct CLMM price transition; the circuit enforces new price/output commitment consistency.
+- Private LP: liquidity positions are bound to commitments; mint/burn verify available balance via membership and nullifier checks while tick bounds stay public in the MVP.
 
-### Verifier
+### Association Set Provider (ASP)
 
-- Groth16 via **Garaga** for swap + LP membership and math constraints.
-- Verifier contracts embedded in `contracts/swap_verifier` and `contracts/lp_verifier`.
+- Rust (Axum) server maintains an off‑chain Merkle tree replica from `Deposit` events, aligned with the on‑chain tree (height 25 → 2^24 leaves, 24 path elements).
+- Serves Merkle paths and associated metadata for the Circom prover and frontend.
+
+### Verifier Layer
+
+- Groth16 proofs verified via **Garaga‑generated** Cairo contracts.
+- Swap and LP verifier contracts live under `contracts/swap_verifier` and `contracts/lp_verifier` and are wired into `ZylithPool`.
 
 ## Project Structure
 
@@ -39,13 +40,38 @@ This README documents what we implemented for the bounty, the architecture choic
 - `asp_server/`: Rust ASP for Merkle paths.
 - `frontend/`: Next.js app (wallet, proofs, swaps, LP, withdrawals).
 
-## MVP Notes (Important Design Choices)
+## MVP Scope and Design Choices
 
-- **Full‑spend notes**: private swap/LP proofs consume a full note and produce a fresh output note.
-- **Output commitments**: the circuits bind `change_commitment` to the output note commitment.
-- **Reserve safety**: withdrawals/fee collection use safe subtraction to avoid underflow.
-- **Tokens set at constructor**: pool is deployed with token0/token1 set (no post‑init step).
-- **CLMM position composition**: LP positions **shift between token0/token1 as price moves** within the tick range. The UI shows the **current expected withdrawal amounts** based on live pool price, not the initial deposit ratio.
+### CLMM Functionality Included
+
+- Swap engine with Ekubo‑like semantics (`swap_step`, tick crossing, fee flows).
+- Pool state: sqrt price, current tick, active liquidity, fee growth, protocol fees.
+- Liquidity management over public tick ranges with positions keyed by commitments.
+- Fee growth inside range and LP rewards accounting, with public fee collection.
+
+### Privacy Features Included
+
+- Shielded deposits and withdrawals via commitments and a Merkle tree.
+- Private swaps (note ownership + swap math + output commitment verified in ZK).
+- Private LP mint/burn bound to commitments instead of addresses.
+- Nullifier checks for double‑spend protection.
+- Tick ranges remain public in the MVP (range privacy is deferred).
+
+### Privacy Features Not in MVP (Intentional)
+
+- Private multi‑hop routing and private route selection.
+- Private range selection and private limit orders.
+- Private oracle integration and private TWAMM/long‑range orders.
+- Private fee collection, private pool initialization, and proof aggregation.
+
+These are part of the long‑term design but explicitly out of scope for this MVP.
+
+### Additional Design Notes
+
+- Full‑spend notes: private swap/LP proofs consume a full note and emit a fresh output note.
+- Output commitments: circuits bind `change_commitment` to the new note’s commitment.
+- Reserve safety: withdrawals and fee collection use safe subtraction to avoid underflow.
+- Tokens are set in the pool constructor (no post‑deployment init).
 
 ## Gas Costs (MVP Reality)
 
@@ -133,7 +159,7 @@ sncast --account <ACCOUNT> deploy --class-hash <POOL_CLASS_HASH> --network sepol
   <LP_VERIFIER_ADDR> \
   <TOKEN0_ADDR> \
   <TOKEN1_ADDR> \
-  79228162514264337593543950336 0 100 10
+  79228162514264337593544 0 0 3000
 ```
 
 ## Public Inputs (MVP Circuits)
@@ -164,8 +190,8 @@ npm run dev
 
 ## Latest Sepolia Deployment
 
-- **ZylithPool**: `0x0256b4b7fb5f536934df8f6734b6a2eb475f0fa5343a18c610dcd5a44c1eda67`
-- **SwapVerifier**: `0x0667c9d49abe50706f10dfdc4106b350996cc19de65cfa0cbb93c422caa835bc`
+- **ZylithPool**: `0x036f797ab5a3f41f8d923790248c1b30930c1d8151b5c8a789631df33e8c4710`
+- **SwapVerifier**: `0x04edaa402cdeb8c8c860d12901b6a72c9140d04e13048f06f7d1316192d38a5a`
 - **LPVerifier**: `0x07691f9e332381715ca5c98b6a1c9b5092d3f5b7a1e4c9e2729c5e675baf3470`
 
 ## What’s Not in MVP (Intentional)

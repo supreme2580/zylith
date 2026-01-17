@@ -16,7 +16,7 @@ target/
 .DS_Store
 
 # Large binaries from circuits
-*.ptau
-*.zkey
-*.wasm
-*.r1cs
+# *.ptau
+# *.zkey
+# *.wasm
+# *.r1cs

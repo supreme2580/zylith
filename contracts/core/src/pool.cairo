@@ -2,6 +2,8 @@
 pub trait IERC20<TState> {
     fn transfer_from(ref self: TState, sender: starknet::ContractAddress, recipient: starknet::ContractAddress, amount: u256) -> bool;
     fn transfer(ref self: TState, recipient: starknet::ContractAddress, amount: u256) -> bool;
+    fn balance_of(self: @TState, account: starknet::ContractAddress) -> u256;
+    fn allowance(self: @TState, owner: starknet::ContractAddress, spender: starknet::ContractAddress) -> u256;
 }
 
 #[derive(Drop, Serde, starknet::Store)]
@@ -240,7 +242,16 @@ mod ZylithPool {
             assert(token_in == token0 || token_in == token1, 'Invalid token_in');
 
             // 1. Transfer Public funds in
-            IERC20Dispatcher { contract_address: token_in }.transfer_from(get_caller_address(), get_contract_address(), amount_in.into());
+            let caller = get_caller_address();
+            let this_contract = get_contract_address();
+            let token_dispatcher = IERC20Dispatcher { contract_address: token_in };
+            
+            let balance = token_dispatcher.balance_of(caller);
+            let allowance = token_dispatcher.allowance(caller, this_contract);
+            assert(balance >= amount_in.into(), 'Insufficient user balance');
+            assert(allowance >= amount_in.into(), 'Insufficient allowance');
+
+            token_dispatcher.transfer_from(caller, this_contract, amount_in.into());
             
             // 2. Execute Swap
             let amount_out = self.swap_internal(amount_in, zero_for_one);
@@ -355,12 +366,27 @@ mod ZylithPool {
             self.ticks.write(t_upper, upper_info);
 
             // Transfer assets
+            let caller = get_caller_address();
+            let this_contract = get_contract_address();
+
             if amount0 > 0 {
-                IERC20Dispatcher { contract_address: token0 }.transfer_from(get_caller_address(), get_contract_address(), amount0.into());
+                let token0_disp = IERC20Dispatcher { contract_address: token0 };
+                let bal0 = token0_disp.balance_of(caller);
+                let allow0 = token0_disp.allowance(caller, this_contract);
+                assert(bal0 >= amount0.into(), 'Insufficient balance0');
+                assert(allow0 >= amount0.into(), 'Insufficient allowance0');
+
+                token0_disp.transfer_from(caller, this_contract, amount0.into());
                 self.reserve0.write(self.reserve0.read() + amount0.into());
             }
             if amount1 > 0 {
-                IERC20Dispatcher { contract_address: token1 }.transfer_from(get_caller_address(), get_contract_address(), amount1.into());
+                let token1_disp = IERC20Dispatcher { contract_address: token1 };
+                let bal1 = token1_disp.balance_of(caller);
+                let allow1 = token1_disp.allowance(caller, this_contract);
+                assert(bal1 >= amount1.into(), 'Insufficient balance1');
+                assert(allow1 >= amount1.into(), 'Insufficient allowance1');
+
+                token1_disp.transfer_from(caller, this_contract, amount1.into());
                 self.reserve1.write(self.reserve1.read() + amount1.into());
             }
 
@@ -682,7 +708,7 @@ mod ZylithPool {
                 (0_u128, SqrtPriceMath::get_amount_1_delta(sqrt_p_lower, sqrt_p_upper, position.liquidity, false))
             };
 
-            // 5. Total to return (Principal + Accumulated Fees)
+            // 5. Total to return (Principal + Accumulated Fees), before withdrawal fee
             let total0 = amount0_principal + position.tokens_owed_0;
             let total1 = amount1_principal + position.tokens_owed_1;
 
@@ -693,7 +719,29 @@ mod ZylithPool {
                 self.state.write(p_state);
             }
 
-            // 7. Clear Position
+            // 7. Apply withdrawal fee (simple percentage of principal+fees, stays in pool)
+            let w_rate: u32 = self.withdrawal_fee_rate.read();
+            let mut payout0: u128 = total0;
+            let mut payout1: u128 = total1;
+
+            if w_rate > 0 {
+                let denom: u256 = 1000000_u256;
+                let rate_u256: u256 = w_rate.into();
+
+                if total0 > 0 {
+                    let fee0_u256: u256 = (total0.into() * rate_u256) / denom;
+                    let fee0: u128 = fee0_u256.try_into().expect('Withdraw fee0 overflow');
+                    payout0 = total0 - fee0;
+                }
+
+                if total1 > 0 {
+                    let fee1_u256: u256 = (total1.into() * rate_u256) / denom;
+                    let fee1: u128 = fee1_u256.try_into().expect('Withdraw fee1 overflow');
+                    payout1 = total1 - fee1;
+                }
+            }
+
+            // 8. Clear Position
             self.positions.write(note_hash, Position { 
                 liquidity: 0, 
                 fee_growth_inside_0_last: 0, 
@@ -702,14 +750,14 @@ mod ZylithPool {
                 tokens_owed_1: 0 
             });
 
-            // 8. Transfer tokens back to recipient
-            if total0 > 0 {
-                IERC20Dispatcher { contract_address: self.token0.read() }.transfer(recipient, total0.into());
-                self.reserve0.write(sub_or_zero(self.reserve0.read(), total0));
+            // 9. Transfer tokens back to recipient (after withdrawal fee)
+            if payout0 > 0 {
+                IERC20Dispatcher { contract_address: self.token0.read() }.transfer(recipient, payout0.into());
+                self.reserve0.write(sub_or_zero(self.reserve0.read(), payout0));
             }
-            if total1 > 0 {
-                IERC20Dispatcher { contract_address: self.token1.read() }.transfer(recipient, total1.into());
-                self.reserve1.write(sub_or_zero(self.reserve1.read(), total1));
+            if payout1 > 0 {
+                IERC20Dispatcher { contract_address: self.token1.read() }.transfer(recipient, payout1.into());
+                self.reserve1.write(sub_or_zero(self.reserve1.read(), payout1));
             }
         }
 
