@@ -1,1 +1,5 @@
+*.ptau filter=lfs diff=lfs merge=lfs -text
+*.zkey filter=lfs diff=lfs merge=lfs -text
+*.wasm filter=lfs diff=lfs merge=lfs -text
+*.rics filter=lfs diff=lfs merge=lfs -text
 * !text !filter !merge !diff
