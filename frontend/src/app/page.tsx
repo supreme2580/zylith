@@ -777,183 +777,6 @@ export default function Home() {
     } catch (e: any) { setError(e.message); } finally { setLoading(false); setStatus(null); }
   }, [address, writeTransaction, poolState.sqrtPrice]);
 
-  const handleWithdrawAllSwaps = useCallback(async () => {
-    if (!address) return;
-    const readyNotes = userNotes.filter(n => (n.type === 'swap' || !n.type) && n.status === 'ready' && !isSpent(computeNullifierHash(n)));
-    if (readyNotes.length === 0) return;
-    
-    setLoading(true);
-    setStatus("Preparing bulk withdrawal...");
-    try {
-      const allCalls = [];
-      for (const note of readyNotes) {
-        setStatus(`Generating proof for withdrawal ${allCalls.length / 2 + 1}/${readyNotes.length}...`);
-        const response = await fetch(`${ASP_SERVER_URL}/get_path`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ commitment: note.commitment, note_hash: note.noteHash })
-        });
-        const merkleData = await response.json();
-        if (!merkleData || merkleData.root === "0x0") continue;
-
-        const nullifierHash = computeNullifierHash(note);
-        
-        const { proof, publicInputs } = await generateZylithWithdrawProof(
-          note.secret,
-          note.nullifier,
-          note.amount,
-          note.amount,
-          { path: merkleData.path, indices: merkleData.indices },
-          merkleData.root,
-          0n
-        );
-        const formattedProof = await formatGroth16ProofForStarknet(proof, publicInputs, "/circuits/withdraw_vk.json");
-        
-        allCalls.push({
-          contractAddress: POOL_ADDRESS,
-          entrypoint: 'add_root_with_path',
-          calldata: [...toU256(note.commitment), toFelt(merkleData.path.length), ...merkleData.path.flatMap((p: string) => toU256(p)), toFelt(merkleData.index), ...toU256(merkleData.root)]
-        });
-        allCalls.push({
-          contractAddress: POOL_ADDRESS,
-          entrypoint: 'withdraw_public',
-          calldata: [...formattedProof, ...toU256(merkleData.root), ...toU256(nullifierHash), toFelt(note.amount), note.token, address, ...toU256("0")]
-        });
-      }
-      
-      setStatus("Submitting bulk withdrawal...");
-      await writeTransaction(allCalls);
-      readyNotes.forEach(n => {
-        markSpent(computeNullifierHash(n));
-        removeNote(n);
-      });
-      setUserNotes(getNotes());
-      setMessage("Bulk withdrawal successful!");
-    } catch (e: any) { setError(e.message); } finally { setLoading(false); setStatus(null); }
-  }, [address, userNotes, writeTransaction]);
-
-  const handleCollectAllFees = useCallback(async () => {
-    if (!address) return;
-    const lpNotes = userNotes.filter(n => n.type === 'lp' && n.status === 'ready' && !isSpent(computeNullifierHash(n)));
-    if (lpNotes.length === 0) return;
-
-    setLoading(true);
-    setStatus("Preparing bulk fee collection...");
-    try {
-      const allCalls = [];
-      for (const note of lpNotes) {
-        setStatus(`Generating proof for fee collection ${allCalls.length + 1}/${lpNotes.length}...`);
-        const response = await fetch(`${ASP_SERVER_URL}/get_path`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ commitment: note.commitment, note_hash: note.noteHash })
-        });
-        const merkleData = await response.json();
-        if (!merkleData || merkleData.root === "0x0") continue;
-
-        const sqrtLower = getSqrtPriceAtTick(note.tickLower || -887272);
-        const sqrtUpper = getSqrtPriceAtTick(note.tickUpper || 887272);
-
-        const { proof, publicInputs } = await generateZylithLPOwnershipProof(
-          note.secret,
-          note.nullifier,
-          note.amount,
-          note.tickLower || -887272,
-          note.tickUpper || 887272,
-          { path: merkleData.path, indices: merkleData.indices },
-          merkleData.root,
-          { sqrtPrice: poolState.sqrtPrice, sqrtLower, sqrtUpper }
-        );
-        const formattedProof = await formatGroth16ProofForStarknet(proof, publicInputs, "/circuits/lp_vk.json");
-
-        const newComm = poseidon2([BigInt(note.noteHash), note.amount]);
-
-        allCalls.push({
-          contractAddress: POOL_ADDRESS,
-          entrypoint: 'add_root_with_path',
-          calldata: [
-            ...toU256(note.commitment),
-            toFelt(merkleData.path.length),
-            ...merkleData.path.flatMap((p: string) => toU256(p)),
-            toFelt(merkleData.index),
-            ...toU256(merkleData.root)
-          ]
-        });
-        allCalls.push({
-          contractAddress: POOL_ADDRESS,
-          entrypoint: 'collect_fees_public',
-          calldata: [...formattedProof, ...toU256(merkleData.root), ...toU256(note.noteHash), toFelt(note.tickLower || -887272), toFelt(note.tickUpper || 887272), address, ...toU256(toHex64(newComm))]
-        });
-      }
-      setStatus("Submitting bulk fee collection...");
-      await writeTransaction(allCalls);
-      setMessage("Bulk fees collected!");
-    } catch (e: any) { setError(e.message); } finally { setLoading(false); setStatus(null); }
-  }, [address, userNotes, writeTransaction, poolState.sqrtPrice]);
-
-  const handleRemoveAllLP = useCallback(async () => {
-    if (!address) return;
-    const lpNotes = userNotes.filter(n => n.type === 'lp' && n.status === 'ready' && !isSpent(computeNullifierHash(n)));
-    if (lpNotes.length === 0) return;
-
-    setLoading(true);
-    setStatus("Removing all liquidity positions...");
-    try {
-      const allCalls = [];
-      for (const note of lpNotes) {
-        setStatus(`Generating proof for LP removal ${allCalls.length / 2 + 1}/${lpNotes.length}...`);
-        const response = await fetch(`${ASP_SERVER_URL}/get_path`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ commitment: note.commitment, note_hash: note.noteHash })
-        });
-        const merkleData = await response.json();
-        if (!merkleData || merkleData.root === "0x0") continue;
-
-        const sqrtLower = getSqrtPriceAtTick(note.tickLower || -887272);
-        const sqrtUpper = getSqrtPriceAtTick(note.tickUpper || 887272);
-
-        const { proof, publicInputs } = await generateZylithLPOwnershipProof(
-          note.secret,
-          note.nullifier,
-          note.amount,
-          note.tickLower || -887272,
-          note.tickUpper || 887272,
-          { path: merkleData.path, indices: merkleData.indices },
-          merkleData.root,
-          { sqrtPrice: poolState.sqrtPrice, sqrtLower, sqrtUpper }
-        );
-        const formattedProof = await formatGroth16ProofForStarknet(proof, publicInputs, "/circuits/lp_vk.json");
-        
-        allCalls.push({
-          contractAddress: POOL_ADDRESS,
-          entrypoint: 'add_root_with_path',
-          calldata: [...toU256(note.commitment), toFelt(merkleData.path.length), ...merkleData.path.flatMap((p: string) => toU256(p)), toFelt(merkleData.index), ...toU256(merkleData.root)]
-        });
-        allCalls.push({
-          contractAddress: POOL_ADDRESS,
-          entrypoint: 'remove_liquidity_public',
-          calldata: [
-            ...formattedProof, 
-            ...toU256(merkleData.root), 
-            ...toU256(note.noteHash), 
-            toFelt(note.tickLower || -887272), 
-            toFelt(note.tickUpper || 887272), 
-            address
-          ]
-        });
-      }
-      setStatus("Submitting LP removal...");
-      await writeTransaction(allCalls);
-      lpNotes.forEach(n => {
-        markSpent(computeNullifierHash(n));
-        removeNote(n);
-      });
-      setUserNotes(getNotes());
-      setMessage("All liquidity removed! Principal and fees sent to wallet.");
-    } catch (e: any) { setError(e.message); } finally { setLoading(false); setStatus(null); }
-  }, [address, userNotes, writeTransaction, poolState.sqrtPrice]);
-
   return (
     <div className="min-h-screen bg-[#020202] text-white selection:bg-purple-500/30 font-sans antialiased flex flex-col">
       {/* Background Glows */}
@@ -1154,14 +977,59 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Swaps/Ready Box */}
+            <div className="glass rounded-[32px] p-8 border border-white/10 bg-gradient-to-br from-blue-500/[0.02] to-transparent">
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Ready to Withdraw</div>
+                  <div className="space-y-1">
+                    <div className="text-2xl font-black tracking-tightest text-white">{readyToWithdraw0.toFixed(6)} <span className="text-[10px] text-white/20 font-medium uppercase">{token0Label}</span></div>
+                    <div className="text-2xl font-black tracking-tightest text-white">{readyToWithdraw1.toFixed(6)} <span className="text-[10px] text-white/20 font-medium uppercase">{token1Label}</span></div>
+                  </div>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                  <ArrowDownLeft className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {userNotes.filter(n => (n.type === 'swap' || !n.type) && !isSpent(computeNullifierHash(n))).map((note, i) => (
+                  <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-white/[0.03] border border-white/5">
+                    <div className="flex items-center gap-3">
+                      {note.token === token0Meta?.address ? (
+                        token0Meta?.logo ? (
+                          <img src={token0Meta.logo} alt={token0Meta.symbol} className="w-8 h-8 rounded-lg shadow-lg" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg shadow-lg bg-[#F7931A]" />
+                        )
+                      ) : (
+                        token1Meta?.logo ? (
+                          <img src={token1Meta.logo} alt={token1Meta.symbol} className="w-8 h-8 rounded-lg shadow-lg" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg shadow-lg bg-[#627EEA]" />
+                        )
+                      )}
+                      <div className="text-[10px] font-black uppercase tracking-wider">{formatAmount(note.amount, note.token === token0Meta?.address ? (token0Meta?.decimals ?? 18) : (token1Meta?.decimals ?? 6), 4)} {note.token === token0Meta?.address ? token0Label : token1Label}</div>
+                    </div>
+                    <button 
+                      onClick={() => handleWithdraw(note)}
+                      disabled={loading || note.status !== 'ready'}
+                      className="px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[9px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 transition-all"
+                    >
+                      Withdraw
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Fees Box */}
             <div className="glass rounded-[32px] p-8 border border-white/10 bg-gradient-to-br from-emerald-500/[0.02] to-transparent">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">LP Rewards</div>
                   <div className="space-y-1">
-                    <div className="text-2xl font-black tracking-tightest text-white">{feesEarned0.toFixed(6)} <span className="text-[10px] text-white/20 font-medium uppercase">{token0Label}</span></div>
-                    <div className="text-2xl font-black tracking-tightest text-white">{feesEarned1.toFixed(6)} <span className="text-[10px] text-white/20 font-medium uppercase">{token1Label}</span></div>
+                    <div className="text-2xl font-black tracking-tightest text-white">Rewards and LP Positions</div>
                   </div>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
@@ -1278,80 +1146,6 @@ export default function Home() {
                   );
                 })}
                 
-                {/* Global LP Actions */}
-                <div className="grid grid-cols-2 gap-3 pt-4 border-t border-white/5">
-                  <button 
-                    onClick={handleCollectAllFees}
-                    disabled={loading || userNotes.filter(n => n.type === 'lp' && n.status === 'ready').length === 0}
-                    className="py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-30 transition-all"
-                  >
-                    Withdraw All Fees
-                  </button>
-                  <button 
-                    onClick={handleRemoveAllLP}
-                    disabled={loading || userNotes.filter(n => n.type === 'lp' && n.status === 'ready').length === 0}
-                    className="py-3 rounded-xl bg-red-500/20 border border-red-500/30 text-[10px] font-black uppercase tracking-[0.2em] text-red-400 hover:bg-red-500/30 disabled:opacity-30 transition-all"
-                  >
-                    Remove All LP
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Swaps/Ready Box */}
-            <div className="glass rounded-[32px] p-8 border border-white/10 bg-gradient-to-br from-blue-500/[0.02] to-transparent">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-2">Ready to Withdraw</div>
-                  <div className="space-y-1">
-                    <div className="text-2xl font-black tracking-tightest text-white">{readyToWithdraw0.toFixed(6)} <span className="text-[10px] text-white/20 font-medium uppercase">{token0Label}</span></div>
-                    <div className="text-2xl font-black tracking-tightest text-white">{readyToWithdraw1.toFixed(6)} <span className="text-[10px] text-white/20 font-medium uppercase">{token1Label}</span></div>
-                  </div>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                  <ArrowDownLeft className="w-6 h-6" />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {userNotes.filter(n => (n.type === 'swap' || !n.type) && !isSpent(computeNullifierHash(n))).map((note, i) => (
-                  <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-white/[0.03] border border-white/5">
-                    <div className="flex items-center gap-3">
-                      {note.token === token0Meta?.address ? (
-                        token0Meta?.logo ? (
-                          <img src={token0Meta.logo} alt={token0Meta.symbol} className="w-8 h-8 rounded-lg shadow-lg" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-lg shadow-lg bg-[#F7931A]" />
-                        )
-                      ) : (
-                        token1Meta?.logo ? (
-                          <img src={token1Meta.logo} alt={token1Meta.symbol} className="w-8 h-8 rounded-lg shadow-lg" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-lg shadow-lg bg-[#627EEA]" />
-                        )
-                      )}
-                      <div className="text-[10px] font-black uppercase tracking-wider">{formatAmount(note.amount, note.token === token0Meta?.address ? (token0Meta?.decimals ?? 18) : (token1Meta?.decimals ?? 6), 4)} {note.token === token0Meta?.address ? token0Label : token1Label}</div>
-                    </div>
-                    <button 
-                      onClick={() => handleWithdraw(note)}
-                      disabled={loading || note.status !== 'ready'}
-                      className="px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[9px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 transition-all"
-                    >
-                      Withdraw
-                    </button>
-                  </div>
-                ))}
-                
-                {/* Global Swap Action */}
-                <div className="pt-4 border-t border-white/5">
-                  <button 
-                    onClick={handleWithdrawAllSwaps}
-                    disabled={loading || userNotes.filter(n => (n.type === 'swap' || !n.type) && n.status === 'ready').length === 0}
-                    className="w-full py-3 rounded-xl bg-blue-500/20 border border-blue-500/30 text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 hover:bg-blue-500/30 disabled:opacity-30 transition-all"
-                  >
-                    Withdraw All Swapped Assets
-                  </button>
-                </div>
               </div>
             </div>
           </div>
