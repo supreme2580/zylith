@@ -72,6 +72,7 @@ These are part of the long‑term design but explicitly out of scope for this MV
 - Output commitments: circuits bind `change_commitment` to the new note’s commitment.
 - Reserve safety: withdrawals and fee collection use safe subtraction to avoid underflow.
 - Tokens are set in the pool constructor (no post‑deployment init).
+- Token prices: We intentionally did not include live token prices for the MVP. We assume token1 and token2 are the same price (STRK and USDC on Sepolia). Both can be obtained from the Ekubo testnet.
 
 ## Gas Costs (MVP Reality)
 
