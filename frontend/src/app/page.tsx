@@ -786,6 +786,17 @@ export default function Home() {
       const calls = [
         {
           contractAddress: POOL_ADDRESS,
+          entrypoint: 'add_root_with_path',
+          calldata: [
+            ...toU256(note.commitment),
+            toFelt(merkleData.path.length),
+            ...merkleData.path.flatMap((p: string) => toU256(p)),
+            toFelt(merkleData.index),
+            ...toU256(merkleData.root)
+          ]
+        },
+        {
+          contractAddress: POOL_ADDRESS,
           entrypoint: 'collect_fees_public',
           calldata: [...formattedProof, ...toU256(merkleData.root), ...toU256(note.noteHash), toFelt(note.tickLower || -887272), toFelt(note.tickUpper || 887272), address, ...toU256(toHex64(newComm))]
         }
@@ -888,6 +899,17 @@ export default function Home() {
 
         const newComm = poseidon2([BigInt(note.noteHash), note.amount]);
 
+        allCalls.push({
+          contractAddress: POOL_ADDRESS,
+          entrypoint: 'add_root_with_path',
+          calldata: [
+            ...toU256(note.commitment),
+            toFelt(merkleData.path.length),
+            ...merkleData.path.flatMap((p: string) => toU256(p)),
+            toFelt(merkleData.index),
+            ...toU256(merkleData.root)
+          ]
+        });
         allCalls.push({
           contractAddress: POOL_ADDRESS,
           entrypoint: 'collect_fees_public',
