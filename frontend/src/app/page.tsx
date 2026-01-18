@@ -174,19 +174,19 @@ export default function Home() {
 
   const { data: balanceData0 } = useReadContract({
     functionName: 'balance_of',
-    args: [address || '0x0'] as `0x${string}`[],
+    args: address ? [address as `0x${string}`] : undefined,
     abi: TOKEN0_ABI as Abi,
     address: token0Meta?.address as `0x${string}`,
     watch: true,
-  });
-
+  } as any);
+ 
   const { data: balanceData1 } = useReadContract({
     functionName: 'balance_of',
-    args: [address || '0x0'] as `0x${string}`[],
+    args: address ? [address as `0x${string}`] : undefined,
     abi: TOKEN0_ABI as Abi,
     address: token1Meta?.address as `0x${string}`,
     watch: true,
-  });
+  } as any);
 
   const publicBalance0 = useMemo(() => parseBalance(balanceData0), [balanceData0]);
   const publicBalance1 = useMemo(() => parseBalance(balanceData1), [balanceData1]);
@@ -286,7 +286,7 @@ export default function Home() {
         const requiredNote = userNotes.find(n => n.commitment === nextAction.targetCommitment);
         if (requiredNote && requiredNote.status === 'ready') {
           setQueue(q => q.slice(1));
-          executeAction(nextAction.params);
+          executeAction();
         }
       }
     };
