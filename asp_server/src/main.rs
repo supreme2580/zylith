@@ -281,10 +281,14 @@ async fn main() {
         .layer(cors)
         .with_state(state);
 
-    let addr = "127.0.0.1:3001";
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(3001);
+    let addr = format!("0.0.0.0:{}", port);
     println!("Zylith ASP Server running on {}", addr);
     
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 

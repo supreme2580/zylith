@@ -5,10 +5,9 @@ COPY src ./src
 RUN cargo build --release
 
 FROM debian:bookworm-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libsqlite3-0 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/zylith-asp /app/zylith-asp
 ENV RUST_LOG=info
 EXPOSE 3001
 CMD ["./zylith-asp"]
-
