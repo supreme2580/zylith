@@ -1073,7 +1073,7 @@ export default function Home() {
                         </div>
                         <div className="text-right">
                           <div className="text-[8px] font-black text-white/20 uppercase tracking-widest">#{note.commitment.slice(2, 8)}</div>
-                          <div className="text-[7px] font-black text-purple-400/40 uppercase tracking-widest mt-1">{Number(note.amount).toFixed(2)} Liq</div>
+                          <div />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
