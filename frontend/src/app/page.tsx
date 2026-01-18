@@ -9,7 +9,7 @@ import {
   Lock, 
   EyeOff, 
   TrendingUp,
-  RotateCw,
+  ArrowLeftRight,
 } from "lucide-react";
 import ConnectWallet from "../components/ConnectWallet";
 import { useAccount, useSendTransaction, useReadContract, useProvider, Abi } from "@starknet-react/core";
@@ -902,7 +902,7 @@ export default function Home() {
                     onClick={() => setSwapDirection(d => d === '0to1' ? '1to0' : '0to1')}
                     className="bg-[#0a0a0a] p-3 rounded-2xl border border-white/10 shadow-2xl hover:border-purple-500/50 hover:scale-110 active:scale-95 transition-all cursor-pointer group/btn"
                   >
-                    <RotateCw className="w-5 h-5 text-purple-400 group-hover/btn:rotate-180 transition-transform duration-500" />
+                    <ArrowLeftRight className="w-5 h-5 text-purple-400 transition-transform duration-300 group-hover/btn:scale-110" />
                   </button>
                 </div>
 
