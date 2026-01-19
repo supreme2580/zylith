@@ -46,7 +46,8 @@ export default function Home() {
   const [swapDirection, setSwapDirection] = useState<SwapDirection>('0to1');
   const [tickLower, setTickLower] = useState('-887272');
   const [tickUpper, setTickUpper] = useState('887272');
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const loading = !!loadingAction;
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -337,7 +338,7 @@ export default function Home() {
 
   const executeAction = useCallback(async () => {
     if (!amount || !address) return;
-    setLoading(true);
+    setLoadingAction('main');
     setError(null);
     setMessage(null);
     setStatus("Preparing transaction...");
@@ -644,13 +645,13 @@ export default function Home() {
       setError(e.message || "An unexpected error occurred");
       setMessage(null);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   }, [amount, address, mode, swapDirection, userNotes, tickLower, tickUpper, writeTransaction]);
 
   const handleWithdraw = useCallback(async (note: ShieldedNote) => {
     if (!address) return;
-    setLoading(true);
+    setLoadingAction(`withdraw-${note.commitment}`);
     setStatus("Preparing withdrawal...");
     try {
       // 1. Fetch Merkle path
@@ -715,14 +716,14 @@ export default function Home() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
       setStatus(null);
     }
   }, [address, writeTransaction]);
 
   const handleCollectFees = useCallback(async (note: ShieldedNote) => {
     if (!address) return;
-    setLoading(true);
+    setLoadingAction(`fees-${note.commitment}`);
     setStatus("Preparing fee collection...");
     try {
       setStatus("Fetching Merkle path...");
@@ -774,7 +775,7 @@ export default function Home() {
       setStatus("Submitting fee collection...");
       await writeTransaction(calls);
       setMessage("Fees collected! Check your wallet.");
-    } catch (e: any) { setError(e.message); } finally { setLoading(false); setStatus(null); }
+    } catch (e: any) { setError(e.message); } finally { setLoadingAction(null); setStatus(null); }
   }, [address, writeTransaction, poolState.sqrtPrice]);
 
   return (
@@ -939,10 +940,10 @@ export default function Home() {
                 <button 
                   onClick={executeAction} 
                   disabled={loading || !amount || estimatedOutput.includes('Liquidity') || estimatedOutput.includes('Indexing')} 
-                  className="relative group/action overflow-hidden bg-gradient-to-r from-purple-600 to-blue-600 p-[1px] rounded-2xl transition-all active:scale-[0.98] disabled:opacity-40"
+                  className="relative group/action overflow-hidden bg-gradient-to-r from-purple-600 to-blue-600 p-[1px] rounded-2xl transition-all active:scale-[0.98] disabled:opacity-40 cursor-pointer"
                 >
                   <div className="bg-[#0a0a0a]/80 group-hover/action:bg-transparent transition-colors py-4 px-6 rounded-[15px] flex items-center justify-center gap-3 cursor-pointer">
-                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                    {loadingAction === 'main' ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                       <>
                         <Shield className={`w-5 h-5 text-white ${estimatedOutput.includes('Indexing') ? 'animate-pulse' : 'fill-white/20'}`} />
                         <span className="text-[11px] font-black uppercase tracking-[0.2em]">
@@ -1014,9 +1015,9 @@ export default function Home() {
                     <button 
                       onClick={() => handleWithdraw(note)}
                       disabled={loading || note.status !== 'ready'}
-                      className="px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[9px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 transition-all"
+                      className="px-4 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[9px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-500/20 disabled:opacity-30 transition-all !cursor-pointer flex items-center gap-2"
                     >
-                      Withdraw
+                      {loadingAction === `withdraw-${note.commitment}` ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Withdraw'}
                     </button>
                   </div>
                 ))}
@@ -1080,14 +1081,14 @@ export default function Home() {
                         <button 
                           onClick={() => handleCollectFees(note)}
                           disabled={loading || note.status !== 'ready'}
-                          className="py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30 transition-all"
+                          className="py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30 transition-all !cursor-pointer flex items-center justify-center gap-2"
                         >
-                          Claim Fees
+                          {loadingAction === `fees-${note.commitment}` ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Claim Fees'}
                         </button>
                         <button 
                           onClick={async () => {
                             if (!address) return;
-                            setLoading(true);
+                            setLoadingAction(`remove-${note.commitment}`);
                             setStatus("Removing liquidity...");
                             try {
                               setStatus("Fetching Merkle path...");
@@ -1134,12 +1135,12 @@ export default function Home() {
                               removeNote(note);
                               setUserNotes(getNotes());
                               setMessage("Liquidity removed! Principal and fees sent to wallet.");
-                            } catch (e: any) { setError(e.message); } finally { setLoading(false); setStatus(null); }
+                            } catch (e: any) { setError(e.message); } finally { setLoadingAction(null); setStatus(null); }
                           }}
                           disabled={loading || note.status !== 'ready'}
-                          className="py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 disabled:opacity-30 transition-all cursor-pointer"
+                          className="py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 disabled:opacity-30 transition-all !cursor-pointer flex items-center justify-center gap-2"
                         >
-                          Remove LP
+                          {loadingAction === `remove-${note.commitment}` ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Remove LP'}
                         </button>
                       </div>
                     </div>
