@@ -877,7 +877,7 @@ export default function Home() {
                       placeholder="0.0" 
                       className="bg-transparent text-3xl font-black outline-none w-full placeholder:text-white/5 tracking-tighter" 
                     />
-                    <button className="bg-white/5 px-4 py-2.5 rounded-2xl flex items-center gap-3 border border-white/10 hover:bg-white/10 transition-all shrink-0">
+                    <button className="bg-white/5 px-4 py-2.5 rounded-2xl flex items-center gap-3 border border-white/10 hover:bg-white/10 transition-all shrink-0 cursor-pointer">
                       {swapDirection === '0to1' ? (
                         token0Meta?.logo ? (
                           <img src={token0Meta.logo} alt={token0Meta.symbol} className="w-6 h-6 rounded-full shadow-lg" />
@@ -916,7 +916,7 @@ export default function Home() {
                     <div className={`${estimatedOutput.match(/[a-z]/i) ? 'text-sm' : 'text-3xl'} font-black tracking-tighter ${amount ? 'text-white' : 'text-white/5'}`}>
                       {estimatedOutput}
                     </div>
-                    <button className="bg-white/5 px-4 py-2.5 rounded-2xl flex items-center gap-3 border border-white/10 opacity-60">
+                    <button className="bg-white/5 px-4 py-2.5 rounded-2xl flex items-center gap-3 border border-white/10 opacity-60 cursor-pointer">
                       {swapDirection === '0to1' ? (
                         token1Meta?.logo ? (
                           <img src={token1Meta.logo} alt={token1Meta.symbol} className="w-6 h-6 rounded-full shadow-lg" />
@@ -1137,7 +1137,7 @@ export default function Home() {
                             } catch (e: any) { setError(e.message); } finally { setLoading(false); setStatus(null); }
                           }}
                           disabled={loading || note.status !== 'ready'}
-                          className="py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 disabled:opacity-30 transition-all"
+                          className="py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-[9px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500/20 disabled:opacity-30 transition-all cursor-pointer"
                         >
                           Remove LP
                         </button>
@@ -1158,9 +1158,9 @@ export default function Home() {
           <span className="font-black text-sm tracking-widest uppercase">Zylith Protocol</span>
         </div>
         <div className="flex gap-12">
-          <a href="#" className="text-[10px] font-black text-white/20 hover:text-purple-400 transition-colors uppercase tracking-[0.3em]">Documentation</a>
-          <a href="#" className="text-[10px] font-black text-white/20 hover:text-purple-400 transition-colors uppercase tracking-[0.3em]">Governance</a>
-          <a href="#" className="text-[10px] font-black text-white/20 hover:text-purple-400 transition-colors uppercase tracking-[0.3em]">Security</a>
+          <a href="#" className="text-[10px] font-black text-white/20 hover:text-purple-400 transition-colors uppercase tracking-[0.3em] cursor-pointer">Documentation</a>
+          <a href="#" className="text-[10px] font-black text-white/20 hover:text-purple-400 transition-colors uppercase tracking-[0.3em] cursor-pointer">Governance</a>
+          <a href="#" className="text-[10px] font-black text-white/20 hover:text-purple-400 transition-colors uppercase tracking-[0.3em] cursor-pointer">Security</a>
         </div>
       </footer>
     </div>
