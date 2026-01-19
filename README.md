@@ -189,11 +189,13 @@ npm install
 npm run dev
 ```
 
-## Latest Sepolia Deployment
+## Latest Mainnet Deployment
 
-- **ZylithPool**: `0x036f797ab5a3f41f8d923790248c1b30930c1d8151b5c8a789631df33e8c4710`
-- **SwapVerifier**: `0x04edaa402cdeb8c8c860d12901b6a72c9140d04e13048f06f7d1316192d38a5a`
-- **LPVerifier**: `0x07691f9e332381715ca5c98b6a1c9b5092d3f5b7a1e4c9e2729c5e675baf3470`
+- **ZylithPool**: `0x049b1ddef5dfc31480b0b91eb109380f56e82efca3c25026b7661c5ac9529d2f`
+- **SwapVerifier**: `0x02af54902e4b804e5e0c61f7a74e5cdc7dea059bac8ac21760d2d8042f46c842`
+- **LPVerifier**: `0x00d70e44af2219cea0a9045cf3254cb99f6e66b2b3ab70a27a68b7250a162f95`
+- **Token0 (STRK)**: `0x04718f5a0Fc34cC1AF16A1cdee98fFB20C31f5cD61D6Ab07201858f4287c938D`
+- **Token1 (USDC)**: `0x033068F6539f8e6e6b131e6B2B814e6c34A5224bC66947c47DaB9dFeE93b35fb`
 
 ## What’s Not in MVP (Intentional)
 
