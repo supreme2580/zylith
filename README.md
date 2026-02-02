@@ -74,16 +74,6 @@ These are part of the long‑term design but explicitly out of scope for this MV
 - Tokens are set in the pool constructor (no post‑deployment init).
 - Token prices: We intentionally did not include live token prices for the MVP. We assume token1 and token2 are the same price (STRK and USDC). Both can be obtained from the Ekubo testnet.
 
-## Gas Costs (MVP Reality)
-
-Shielded actions are more expensive than public swaps/LP because each transaction does **more work**:
-- proof verification (Groth16 via Garaga),
-- merkle root/path checks,
-- nullifier tracking,
-- and extra calldata for proof inputs.
-
-This is expected for privacy‑preserving flows and will be optimized in later versions.
-
 ## Build & Deploy (Exact Flow)
 
 ### 1) Circuits (Groth16)
